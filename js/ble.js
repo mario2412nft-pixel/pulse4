@@ -20,15 +20,8 @@ function parseTemperature(value) {
   let exponent = value.getInt8(4);
   return mantissa * (10 ** exponent);
 }
-export async function connectBLE(onData) {
-  if (!navigator.bluetooth) throw new Error('Web Bluetooth ni na voljo. Odpri aplikacijo v Chrome/Edge prek HTTPS ali localhost.');
-  // WHOOP naprave pogosto ne oglašujejo standardne Heart Rate storitve.
-  // Prejšnji filter je zato na Androidu seznam skril. Dovoli izbiro naprave,
-  // nato pa po povezavi poskusi standardne storitve, ki jih naprava podpira.
-  device = await navigator.bluetooth.requestDevice({
-    acceptAllDevices: true,
-    optionalServices: ['heart_rate', 'battery_service', 'device_information', 'health_thermometer']
-  });
+async function connectDevice(selected, onData) {
+  device = selected;
   device.addEventListener('gattserverdisconnected', () => onData({ type: 'status', connected: false, text: 'Povezava prekinjena' }));
   const server = await device.gatt.connect();
   onData({ type: 'status', connected: true, text: `Povezano: ${device.name || 'BLE naprava'}`, name: device.name || 'BLE naprava' });
@@ -40,5 +33,18 @@ export async function connectBLE(onData) {
   try { const service = await server.getPrimaryService(UUID.info); for (const [key, uuid] of [['model', UUID.model], ['firmware', UUID.fw]]) { try { onData({ type: key, value: text(await (await service.getCharacteristic(uuid)).readValue()) }); } catch {} } } catch {}
   try { const service = await server.getPrimaryService(UUID.tempService); const ch = await service.getCharacteristic(UUID.temp); await ch.startNotifications(); ch.addEventListener('characteristicvaluechanged', e => { const value = parseTemperature(e.target.value); if (value != null) onData({ type: 'temp', value }); }); } catch { onData({ type: 'info', text: 'Temperatura ni na voljo.' }); }
   return device;
+}
+export async function connectBLE(onData) {
+  if (!navigator.bluetooth) throw new Error('Web Bluetooth ni na voljo. Odpri aplikacijo v Chrome/Edge prek HTTPS ali localhost.');
+  device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: ['heart_rate', 'battery_service', 'device_information', 'health_thermometer'] });
+  return connectDevice(device, onData);
+}
+export async function reconnectBLE(onData) {
+  if (!navigator.bluetooth?.getDevices) return false;
+  const devices = await navigator.bluetooth.getDevices();
+  const permitted = devices.find(d => d.name?.toLowerCase().includes('whoop')) || devices[0];
+  if (!permitted) return false;
+  await connectDevice(permitted, onData);
+  return true;
 }
 export function disconnectBLE() { if (device?.gatt?.connected) device.gatt.disconnect(); }

@@ -1,5 +1,5 @@
 import { openDB, addSample, getSamples, saveSession, getSessions, clearAll } from './db.js';
-import { connectBLE } from './ble.js';
+import { connectBLE, reconnectBLE } from './ble.js';
 import { renderHRChart, renderAvgChart, renderZoneChart, renderHealthChart } from './charts.js';
 
 const $ = id => document.getElementById(id);
@@ -40,6 +40,10 @@ async function connect() {
   $('ble-error').hidden = true;
   try { await connectBLE(onBLE); } catch (error) { $('ble-error').hidden = false; $('ble-error').textContent = error.message; setText('conn-status', 'Povezava ni uspela'); }
 }
+async function tryReconnect() {
+  if (state.connected) return;
+  try { await reconnectBLE(onBLE); } catch { /* uporabnik lahko vedno izbere napravo ročno */ }
+}
 function simulate() {
   if (state.connected) return;
   state.hr = Math.round(58 + Math.random() * 14); state.temp = 36.4 + Math.random() * .5; state.batt = Math.max(10, state.batt - (Math.random() > .92 ? 1 : 0));
@@ -77,4 +81,5 @@ $('sleep-form').addEventListener('submit', event => { event.preventDefault(); $(
 document.body.insertAdjacentHTML('beforeend', '<button id="csv-download" class="btn" style="position:fixed;right:16px;bottom:16px;z-index:4">Prenesi CSV</button>');
 $('csv-download').addEventListener('click', downloadCSV);
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
-openDB().then(refresh).then(() => { setSource('sim'); updateMetrics(); setInterval(simulate, 15000); }).catch(error => { $('conn-status').textContent = 'IndexedDB napaka: ' + error.message; });
+openDB().then(refresh).then(() => { setSource('sim'); updateMetrics(); setInterval(simulate, 15000); setTimeout(tryReconnect, 250); }).catch(error => { $('conn-status').textContent = 'IndexedDB napaka: ' + error.message; });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') setTimeout(tryReconnect, 250); });
