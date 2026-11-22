@@ -17,7 +17,7 @@ export function openDB() {
 async function store(name, mode = 'readonly') { await openDB(); return database.transaction(name, mode).objectStore(name); }
 export async function addSample(sample) {
   const s = await store('samples', 'readwrite');
-  return new Promise((resolve, reject) => { const r = s.add({ ts: Date.now(), hr: null, temp: null, batt: null, source: 'sim', ...sample }); r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error); });
+  return new Promise((resolve, reject) => { const r = s.add({ ts: Date.now(), hr: null, hrv: null, temp: null, batt: null, source: 'sim', ...sample }); r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error); });
 }
 export async function getSamples(rangeMs = 86400000) {
   const s = await store('samples');

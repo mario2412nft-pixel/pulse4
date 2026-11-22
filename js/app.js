@@ -3,7 +3,7 @@ import { connectBLE } from './ble.js';
 import { renderHRChart, renderAvgChart, renderZoneChart, renderHealthChart } from './charts.js';
 
 const $ = id => document.getElementById(id);
-const state = { hr: 62, batt: 78, temp: 36.6, source: 'sim', connected: false, samples: [], sessions: [] };
+const state = { hr: 62, hrv: null, rr: [], batt: 78, temp: 36.6, source: 'sim', connected: false, samples: [], sessions: [] };
 const fmt = value => value == null ? '—' : value;
 const setText = (id, value) => { const el = $(id); if (el) el.textContent = value; };
 
@@ -19,10 +19,16 @@ function updateMetrics() {
   setText('batt-val', fmt(state.batt) + '%');
   setText('temp-val', state.temp == null ? '— °C' : state.temp.toFixed(1).replace('.', ',') + ' °C');
   setText('device-batt', state.batt == null ? '—' : state.batt + '%');
+  setText('hrv-val', state.hrv == null ? 'Ni RR' : Math.round(state.hrv) + ' ms');
+}
+function rmssd(values) {
+  if (values.length < 3) return null;
+  const diffs = values.slice(1).map((v, i) => v - values[i]);
+  return Math.sqrt(diffs.reduce((sum, v) => sum + v * v, 0) / diffs.length);
 }
 function onBLE(data) {
   if (data.type === 'status') { state.connected = data.connected; setText('conn-status', data.text); setText('device-name', data.name || '—'); $('conn-btn').textContent = data.connected ? 'Povezano' : 'Poveži'; setSource(data.connected ? 'ble' : 'sim'); }
-  if (data.type === 'hr') { state.hr = data.value; addSample({ hr: state.hr, batt: state.batt, temp: state.temp, source: 'ble' }).then(refresh); }
+  if (data.type === 'hr') { state.hr = data.value; if (data.rrMs?.length) { state.rr = state.rr.concat(data.rrMs).slice(-60); state.hrv = rmssd(state.rr); } addSample({ hr: state.hr, hrv: state.hrv, batt: state.batt, temp: state.temp, source: 'ble' }).then(refresh); }
   if (data.type === 'battery') { state.batt = data.value; setText('device-batt', data.value + '%'); }
   if (data.type === 'temp') state.temp = data.value;
   if (data.type === 'model') setText('device-model', data.value || '—');
