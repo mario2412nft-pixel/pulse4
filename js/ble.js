@@ -12,7 +12,13 @@ function parseTemperature(value) {
 }
 export async function connectBLE(onData) {
   if (!navigator.bluetooth) throw new Error('Web Bluetooth ni na voljo. Odpri aplikacijo v Chrome/Edge prek HTTPS ali localhost.');
-  device = await navigator.bluetooth.requestDevice({ filters: [{ services: ['heart_rate', 'battery_service', 'device_information', 'health_thermometer'] }] });
+  // WHOOP naprave pogosto ne oglašujejo standardne Heart Rate storitve.
+  // Prejšnji filter je zato na Androidu seznam skril. Dovoli izbiro naprave,
+  // nato pa po povezavi poskusi standardne storitve, ki jih naprava podpira.
+  device = await navigator.bluetooth.requestDevice({
+    acceptAllDevices: true,
+    optionalServices: ['heart_rate', 'battery_service', 'device_information', 'health_thermometer']
+  });
   device.addEventListener('gattserverdisconnected', () => onData({ type: 'status', connected: false, text: 'Povezava prekinjena' }));
   const server = await device.gatt.connect();
   onData({ type: 'status', connected: true, text: `Povezano: ${device.name || 'BLE naprava'}`, name: device.name || 'BLE naprava' });
